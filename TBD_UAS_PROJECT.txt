@@ -1,0 +1,267 @@
+GROUPING HAVING ORDERING
+Menampilkan user dengan staycation ter addict dengan syarat booking lebih dari 2 kali booking
+SELECT id_login, floor(sum(price)) AS nominal, sum(jml_malam) AS malam, count(id_login) AS user FROM booking GROUP BY id_login HAVING count(id_login) > 2 ORDER BY sum(price) DESC
+
+Function Sql (Date Format)
+Menampilkan booking terbaru dengan kolom checkin checkout menggunakan tanggal format Indonesia
+SELECT id, hotel, nama, date_format(arrived, '%W, ' '%D ' '%M ' '%Y') as 'checkin', date_format(departure, '%W, ' '%D ' '%M ' '%Y') as 'checkout' from booking order by arrived desc
+
+VIEW dan function concat
+Tampilkan admin dengan ID penambahan 00, username, nama, email, id jika admin = 1
+CREATE VIEW admindata AS SELECT concat('00', id_login) as id_admin, username, name, email FROM users WHERE admin=1
+SELECT * FROM admindata
+MariaDB [travel]> CREATE VIEW admindata AS SELECT concat('00', id_login) as id_admin, username, name, email FROM users WHERE admin=1;
+Query OK, 0 rows affected (0.010 sec)
+
+Subquiries
+Tampilkan user baru yang belum booking sama sekali
+SELECT id_login FROM users EXCEPT SELECT id_login FROM booking;
+
+RANK
+Tampilkan Booking Hotel Termahal
+SELECT id, hotel, nama, price, RANK() OVER (ORDER BY price DESC) AS booking_termahal FROM booking;
+
+PROCEDURE
+Tampilkan detail booking
+MariaDB [travel]> DELIMITER //
+MariaDB [travel]> CREATE OR REPLACE PROCEDURE detailBooking(
+    -> IN sql_username varchar(250))
+    -> BEGIN
+    -> SELECT * FROM users, booking WHERE booking.id_login=users.id_login AND users.username=sql_username ORDER BY booking.id DESC LIMIT 1;
+    -> END //
+Query OK, 0 rows affected (0.010 sec)
+
+MariaDB [travel]> DELIMITER ;
+MariaDB [travel]> CALL detailBooking('ditaa'); //detail booking
+
+Tampilkan detail booking berdasarkan ID yg diklik
+MariaDB [travel]> DELIMITER //
+MariaDB [travel]> CREATE OR REPLACE PROCEDURE detailBookingAll (
+    -> IN sql_username varchar(250),
+    -> IN sql_idbook int(11))
+    -> BEGIN
+    -> SELECT * FROM users, booking WHERE booking.id=sql_idbook;
+    -> END //
+Query OK, 0 rows affected (0.009 sec)
+
+MariaDB [travel]> DELIMITER ;
+MariaDB [travel]> CALL detailBookingAll('ditaa', 59); // detail booking diklik
+
+Tampilkan jumlah user yang terdapat pada aplikasi
+MariaDB [travel]> DELIMITER //
+MariaDB [travel]> CREATE PROCEDURE totalUsers(
+    -> OUT total_user int(11))
+    -> BEGIN
+    -> SELECT COUNT(id_login) INTO total_user FROM users;
+    -> END //
+Query OK, 0 rows affected (0.008 sec)
+
+MariaDB [travel]> DELIMITER ;
+MariaDB [travel]> CALL totalUsers(@total_user);
+Query OK, 1 row affected (0.004 sec)
+
+MariaDB [travel]> SELECT @total_user;
+
+Memperbarui data booking ketika terdapat user yang menghapus pesanan
+MariaDB [travel]> DELIMITER //
+MariaDB [travel]> CREATE PROCEDURE deleteBooking(
+    -> IN reservasi int(11))
+    -> BEGIN
+    -> DELETE FROM booking WHERE id = reservasi;
+    -> END //
+Query OK, 0 rows affected (0.010 sec)
+
+MariaDB [travel]> DELIMITER ;
+MariaDB [travel]> CALL deleteBooking(58); //buat delete booking
+Query OK, 1 row affected (0.006 sec)
+
+MariaDB [travel]> SELECT * FROM booking;
+
+
+TRIGGER
+Membuat log history pembayaran
+DELIMITER //
+CREATE TRIGGER log_pembayaran BEFORE UPDATE ON transaksi
+FOR EACH ROW
+BEGIN
+INSERT INTO log_transaksi (status, namauser, nomorkartu, idbooking_transaksi, namahotel_transaksi, nominal_transaksi, waktu_transaksi) VALUES ('Pembayaran Hotel Terkonfirmasi', NEW.nama, NEW.nomor_kartu, NEW.id_booking, NEW.nama_hotel, NEW.nominal, NOW());
+END //
+
+MariaDB [travel]> DELIMITER //
+MariaDB [travel]> CREATE TRIGGER log_pembayaran BEFORE UPDATE ON transaksi
+    -> FOR EACH ROW
+    -> BEGIN
+    -> INSERT INTO log_transaksi (status, namauser, nomorkartu, idbooking_transaksi, namahotel_transaksi, nominal_transaksi, waktu_transaksi) VALUES ('Pembayaran Hotel Terkonfirmasi', NEW.nama, NEW.nomor_kartu, NEW.id_booking, NEW.nama_hotel, NEW.saldo, NOW());
+    -> END //
+Query OK, 0 rows affected (0.009 sec)
+MariaDB [travel]> DELIMITER ;
+MariaDB [travel]> SELECT * FROM log_transaksi;
+
+MariaDB [travel]> DELIMITER //
+MariaDB [travel]> CREATE TRIGGER log_update_booking BEFORE UPDATE ON booking
+    -> FOR EACH ROW
+    -> BEGIN
+    -> INSERT INTO log_booking (status, id_booking, hotel, nama_pemesan, roomtype_old, roomtype_new, guests_old, guests_new, arrived_old, arrived_new, departure_old, departure_new, time) VALUES ('Update Form Booking', NEW.id, NEW.hotel, NEW.nama, OLD.room_type, NEW.room_type, OLD.tamu, NEW.tamu, OLD.arrived, NEW.arrived, OLD.departure, NEW.departure, NOW());
+    -> END //
+Query OK, 0 rows affected (0.008 sec)
+
+MariaDB [travel]> DELIMITER ;
+MariaDB [travel]> SELECT * FROM log_booking;
+
+Membuat log history Booking
+a. Create Booking
+DELIMITER //
+CREATE TRIGGER log_insert_booking AFTER INSERT ON booking
+FOR EACH ROW
+BEGIN
+INSERT INTO log_booking (status, id_booking, hotel, nama_pemesan, roomtype_new, guests_new, arrived_new, departure_new, time) VALUES ('Insert Form Booking', NEW.id, NEW.hotel, NEW.nama, NEW.room_type, NEW.tamu, NEW.arrived, NEW.departure, NOW());
+END //
+DELIMITER ;
+
+MariaDB [travel]> DELIMITER //
+MariaDB [travel]> CREATE TRIGGER log_insert_booking AFTER INSERT ON booking
+    -> FOR EACH ROW
+    -> BEGIN
+    -> INSERT INTO log_booking (status, id_booking, hotel, nama_pemesan, roomtype_new, guests_new, arrived_new, departure_new, time) VALUES ('Insert Form Booking', NEW.id, NEW.hotel, NEW.nama, NEW.room_type, NEW.tamu, NEW.arrived, NEW.departure, NOW());
+    -> END //
+Query OK, 0 rows affected (0.012 sec)
+
+MariaDB [travel]> DELIMITER ;
+MariaDB [travel]> SELECT * FROM log_booking;
+
+b. Update Booking
+DELIMITER //
+CREATE TRIGGER log_update_booking BEFORE UPDATE ON booking
+FOR EACH ROW
+BEGIN
+INSERT INTO log_booking (status, id_booking, hotel, nama_pemesan, roomtype_old, roomtype_new, guests_old, guests_new, arrived_old, arrived_new, departure_old, departure_new, time) VALUES ('Update Form Booking', NEW.id, NEW.hotel, NEW.nama, OLD.room_type, NEW.room_type, OLD.tamu, NEW.tamu, OLD.arrived, NEW.arrived, OLD.departure, NEW.departure, NOW());
+END //
+
+MariaDB [travel]> DELIMITER //
+MariaDB [travel]> CREATE TRIGGER log_update_booking BEFORE UPDATE ON booking
+    -> FOR EACH ROW
+    -> BEGIN
+    -> INSERT INTO log_booking (status, id_booking, hotel, nama_pemesan, roomtype_old, roomtype_new, guests_old, guests_new, arrived_old, arrived_new, departure_old, departure_new, time) VALUES ('Update Form Booking', NEW.id, NEW.hotel, NEW.nama, OLD.room_type, NEW.room_type, OLD.tamu, NEW.tamu, OLD.arrived, NEW.arrived, OLD.departure, NEW.departure, NOW());
+    -> END //
+Query OK, 0 rows affected (0.008 sec)
+
+MariaDB [travel]> DELIMITER ;
+MariaDB [travel]> SELECT * FROM log_booking;
+
+c. DELETE BOOKING
+MariaDB [travel]> DELIMITER //
+MariaDB [travel]> CREATE OR REPLACE TRIGGER log_delete_booking AFTER DELETE ON booking
+    -> FOR EACH ROW
+    -> BEGIN
+    -> INSERT INTO log_booking (status, id_booking, hotel, nama_pemesan, time) VALUES ('Delete Form Booking', OLD.id, OLD.hotel, OLD.nama, NOW());
+    -> END //
+Query OK, 0 rows affected (0.010 sec)
+
+MariaDB [travel]> DELIMITER ;
+
+TRANSACTION
+UPDATE `transaksi` SET `saldo` = '2800000.00', `id_booking` = '89', `nama_hotel` = 'Jiwa Jawa Hotel' WHERE `transaksi`.`nomor_rekening` = 101010;
+
+DELIMITER //
+CREATE PROCEDURE payment (
+IN nsbh_nomor_kartu int(20),
+IN nsbh_pin int(10),
+IN jmlh_pembayaran int(15),
+IN nsbh_id_booking int(11),
+IN nsbh_nama_hotel varchar(250),
+OUT pesan varchar(250))
+BEGIN
+DECLARE exist int;
+DECLARE nsbh_saldo decimal(12,2);
+DECLARE nsbh_sisa decimal(12,2);
+DECLARE EXIT HANDLER FOR SQLEXCEPTION
+BEGIN
+SET pesan = 'Sistem Error';
+ROLLBACK;
+END;
+START TRANSACTION;
+SELECT COUNT(*) INTO exist FROM transaksi WHERE nomor_kartu = nsbh_nomor_kartu AND pin = nsbh_pin;
+IF exist <> 1 THEN
+SET pesan = 'PIN tidak valid';
+ROLLBACK;
+ELSE
+SELECT saldo INTO nsbh_saldo FROM transaksi WHERE nomor_kartu = nsbh_nomor_kartu AND pin = nsbh_pin;
+SET nsbh_sisa = nsbh_saldo - jmlh_pembayaran;
+IF jmlh_pembayaran < 50000 THEN
+SET pesan = 'Penarikan minimal Rp. 50.000';
+ROLLBACK;
+ELSE
+IF nsbh_sisa < 50000 THEN
+SET pesan = 'Minimal sisa saldo adalah Rp. 50.000';
+ROLLBACK;
+ELSE
+UPDATE transaksi SET saldo = nsbh_sisa, id_booking = nsbh_id_booking, nama_hotel = nsbh_nama_hotel, nominal = jmlh_pembayaran WHERE nomor_kartu = nsbh_nomor_kartu AND pin = nsbh_pin;
+SET pesan = 'Pembayaran booking hotel berhasil!';
+COMMIT;
+END IF;
+END IF;
+END IF;
+END //
+
+MariaDB [travel]> DELIMITER //
+MariaDB [travel]> CREATE PROCEDURE payment (
+    -> IN nsbh_nomor_kartu int(20),
+    -> IN nsbh_pin int(10),
+    -> IN jmlh_pembayaran int(15),
+    -> IN nsbh_id_booking int(11),
+    -> IN nsbh_nama_hotel varchar(250),
+    -> OUT pesan varchar(250))
+    -> BEGIN
+    -> DECLARE exist int;
+    -> DECLARE nsbh_saldo decimal(12,2);
+    -> DECLARE nsbh_sisa decimal(12,2);
+    -> DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    -> BEGIN
+    -> SET pesan = 'Sistem Error';
+    -> ROLLBACK;
+    -> END;
+    -> START TRANSACTION;
+    -> SELECT COUNT(*) INTO exist FROM transaksi WHERE nomor_kartu = nsbh_nomor_kartu AND pin = nsbh_pin;
+    -> IF exist <> 1 THEN
+    -> SET pesan = 'PIN tidak valid';
+    -> ROLLBACK;
+    -> ELSE
+    -> SELECT saldo INTO nsbh_saldo FROM transaksi WHERE nomor_kartu = nsbh_nomor_kartu AND pin = nsbh_pin;
+    -> SET nsbh_sisa = nsbh_saldo - jmlh_pembayaran;
+    -> IF jmlh_pembayaran < 50000 THEN
+    -> SET pesan = 'Penarikan minimal Rp. 50.000';
+    -> ROLLBACK;
+    -> ELSE
+    -> IF nsbh_sisa < 50000 THEN
+    -> SET pesan = 'Minimal sisa saldo adalah Rp. 50.000';
+    -> ROLLBACK;
+    -> ELSE
+    -> UPDATE transaksi SET saldo = nsbh_sisa, id_booking = nsbh_id_booking, nama_hotel = nsbh_nama_hotel, nominal = jmlh_pembayaran WHERE nomor_kartu = nsbh_nomor_kartu AND pin = nsbh_pin;
+    -> SET pesan = 'Pembayaran booking hotel berhasil!';
+    -> COMMIT;
+    -> END IF;
+    -> END IF;
+    -> END IF;
+    -> END //
+Query OK, 0 rows affected (0.011 sec)
+
+CALL payment(212121, 12345, 300000, 95, 'Jiwa Jawa Bromo Hotel', @pesan);
+SELECT @pesan;
+
+•	Kondisi 1 : Nomor kartu dan pin harus valid 
+•	Kondisi 2 : Memasukkan ID booking dan nama hotel
+•	Kondisi 3 : Saldo mencukupi 
+•	Kondisi 4 : Saldo minimal di rekening tersisa Rp. 50.000 
+•	Kondisi 5 : Nominal bisa diambil sesuai jumlah pembayaran 
+•	Kondisi 6 : Minimal penarikan Rp. 50.000 dan maksimalnya tidak terbatas 
+
+Create Table : Nomor rekening, nomor kartu, nama, pin, saldo, id booking, nama hotel
+
+RANK
+Tampilkan Booking Hotel Termahal
+RANK
+SELECT id, hotel, nama, price, RANK() OVER (ORDER BY price DESC) AS booking_termahal FROM booking;
+DENSE RANK
+SELECT id, hotel, nama, price, DENSE_RANK() OVER (ORDER BY price) AS booking_termahal FROM booking;
+ROW NUMBER
+SELECT id, hotel, nama, price, ROW_NUMBER() OVER (ORDER BY price) AS booking_termahal FROM booking;
